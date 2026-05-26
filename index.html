@@ -6,6 +6,7 @@
   <title>Drizzy Grid</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --vinyl-size: 160px; }
     body {
       background: #000;
       display: flex;
@@ -20,9 +21,100 @@
       box-shadow: 0 0 24px rgba(0, 191, 255, 0.5);
     }
     canvas { display: block; background: #000; }
+
+    /* ── Vinyl disc (top-right) ── */
+    #vp-wrap {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 200;
+      width: var(--vinyl-size);
+      height: var(--vinyl-size);
+    }
+    #vinyl-disc {
+      width: var(--vinyl-size);
+      height: var(--vinyl-size);
+      border-radius: 50%;
+      position: relative;
+      cursor: pointer;
+      background: radial-gradient(circle at 50% 50%, #1a1a1a 0%, #050505 72%);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.75);
+    }
+    #vinyl-disc.playing {
+      animation: vinyl-spin 4s linear infinite;
+    }
+    @keyframes vinyl-spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    .grooves {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: repeating-radial-gradient(
+        circle at center,
+        transparent 0px,
+        transparent 6px,
+        rgba(0, 0, 0, 0.22) 7px,
+        transparent 8px
+      );
+      pointer-events: none;
+      z-index: 1;
+    }
+    #vinyl-label {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 42%;
+      height: 42%;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      overflow: hidden;
+      background: #1c1c1c;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid rgba(255, 184, 174, 0.25);
+    }
+    #album-art {
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      object-fit: cover;
+      display: none;
+      position: absolute;
+      inset: 0;
+    }
+    #center-hole {
+      width: 14%;
+      height: 14%;
+      min-width: 18px;
+      min-height: 18px;
+      border-radius: 50%;
+      background: #111;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 3;
+      box-shadow: inset 0 0 4px #000;
+    }
   </style>
 </head>
 <body>
+  <!-- ═══ VINYL: cover image (optional — or set VINYL_IMAGE in script below) ═══ -->
+  <div id="vp-wrap">
+    <div id="vinyl-disc" aria-label="vinyl — click to play or pause">
+      <div class="grooves"></div>
+      <div id="vinyl-label">
+        <!-- or set src here: src="./images/cover.jpg" -->
+        <img id="album-art" src="" alt="album cover" />
+      </div>
+      <div id="center-hole"></div>
+    </div>
+  </div>
+
   <div id="canvas-wrap">
     <canvas id="gameCanvas"></canvas>
   </div>
@@ -508,6 +600,55 @@ document.addEventListener('keydown', e => {
 
 buildMaze();
 requestAnimationFrame(gameLoop);
+</script>
+
+<script>
+(function initVinylDisc() {
+  // ═══════════════════════════════════════════════════════════
+  //  VINYL — your track (.mp3)
+  // ═══════════════════════════════════════════════════════════
+  const VINYL_MP3 = '';   // e.g. './audio/your-track.mp3'
+
+  // ═══════════════════════════════════════════════════════════
+  //  VINYL — your cover image
+  // ═══════════════════════════════════════════════════════════
+  const VINYL_IMAGE = ''; // e.g. './images/cover.jpg'
+
+  const disc  = document.getElementById('vinyl-disc');
+  const img   = document.getElementById('album-art');
+  const audio = new Audio();
+
+  if (VINYL_MP3) audio.src = VINYL_MP3;
+
+  if (VINYL_IMAGE) {
+    img.src = VINYL_IMAGE;
+    img.onload = () => { img.style.display = 'block'; };
+  }
+
+  function setSpin(on) {
+    disc.classList.toggle('playing', on);
+  }
+
+  function togglePlay() {
+    if (!VINYL_MP3) {
+      console.warn('Set VINYL_MP3 in index.html (vinyl script section).');
+      return;
+    }
+    if (audio.paused) {
+      audio.play().then(() => setSpin(true)).catch(err => console.warn('Playback failed:', err));
+    } else {
+      audio.pause();
+      setSpin(false);
+    }
+  }
+
+  disc.addEventListener('click', togglePlay);
+  audio.addEventListener('ended', () => setSpin(false));
+  audio.addEventListener('pause', () => setSpin(false));
+  audio.addEventListener('play', () => setSpin(true));
+
+  if (VINYL_MP3) audio.play().catch(() => { /* autoplay blocked — click disc */ });
+})();
 </script>
 </body>
 </html>
