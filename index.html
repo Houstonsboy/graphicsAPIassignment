@@ -109,7 +109,7 @@
       <div class="grooves"></div>
       <div id="vinyl-label">
         <!-- or set src here: src="./images/cover.jpg" -->
-        <img id="album-art" src="" alt="album cover" />
+        <img id="album-art" src="./Drake.jpeg" alt="album cover" />
       </div>
       <div id="center-hole"></div>
     </div>
@@ -122,9 +122,7 @@
 <script src="./entityrules.js"></script>
 <script src="./gameplay.js"></script>
 <script>
-// ================================================================
 //  CONFIGURATION
-// ================================================================
 const T_EMPTY  = 0;   // open path (gets a pellet in buildMaze)
 const T_WALL   = 1;   // solid wall  → drawn #00BFFF
 const T_PELLET = 2;   // small dot on a path
@@ -135,11 +133,9 @@ const WALL_COLOR  = '#00BFFF';  // deep sky blue walls
 const PATH_COLOR  = '#000';    // black walkable corridors
 const WALL_STROKE = '#009acd'; // slightly darker edge on walls
 
-// ================================================================
 //  GEOMETRY STAGE — static maze layout (your grid, lines 42–65)
 //  Each number is one tile. Row/column index × TILE = pixel position
 //  when we draw in drawMaze().
-// ================================================================
 /*
   Tile key:
     1 = wall
@@ -186,10 +182,7 @@ const TILE = Math.floor(Math.min(
 const W = TILE * COLS;
 const H = TILE * ROWS;
 
-// ================================================================
 //  APPLICATION STAGE — copy template into live `maze[][]`
-//  Same pattern as maze.html: static layout → mutable board for gameplay.
-// ================================================================
 let maze = [];
 
 function buildMaze() {
@@ -222,6 +215,8 @@ canvas.height = H;
 //  RASTERIZATION STAGE — drawMaze()
 //  Walls: #00BFFF fills. Paths: black (#000). Pellets drawn on paths.
 // ================================================================
+
+//acquires 2D rendering context and framebuffer size. MAZE TILES TO PIXEL POSITIONS.
 function drawMaze() {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
@@ -607,12 +602,12 @@ requestAnimationFrame(gameLoop);
   // ═══════════════════════════════════════════════════════════
   //  VINYL — your track (.mp3)
   // ═══════════════════════════════════════════════════════════
-  const VINYL_MP3 = '';   // e.g. './audio/your-track.mp3'
+  const VINYL_MP3 = './ImUpset.mp3';
 
   // ═══════════════════════════════════════════════════════════
   //  VINYL — your cover image
   // ═══════════════════════════════════════════════════════════
-  const VINYL_IMAGE = ''; // e.g. './images/cover.jpg'
+  const VINYL_IMAGE = './Drake.jpeg';
 
   const disc  = document.getElementById('vinyl-disc');
   const img   = document.getElementById('album-art');
