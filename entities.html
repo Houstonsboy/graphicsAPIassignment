@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Game Entities - Schema</title>
+    <style>
+      body { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; padding: 16px; background: #0b0b0b; color: #eaeaea; }
+      code, pre { font-family: inherit; }
+      .box { background: #141414; border: 1px solid #2a2a2a; padding: 12px; margin: 12px 0; border-radius: 8px; }
+      h1 { font-size: 16px; margin: 0 0 6px; }
+      h2 { font-size: 13px; margin: 16px 0 6px; color: #cfcfcf; }
+      ul { margin: 6px 0 0 18px; }
+    </style>
+  </head>
+  <body>
+    <h1>Entities (Pac-Man + 4 Opponents)</h1>
+
+    <div class="box">
+      <h2>Coordinate system</h2>
+      <ul>
+        <li><code>r</code>, <code>c</code>: tile coordinates (row, col) in the maze grid.</li>
+        <li><code>x</code>, <code>y</code>: pixel coordinates on the canvas derived from tile coords.</li>
+      </ul>
+      <pre>
+// Helpers (in drizzy.html):
+// tileToPixelX(col) = col * TILE
+// tileToPixelY(row) = row * TILE
+// tile center:
+// x = tileToPixelX(c) + TILE/2
+// y = tileToPixelY(r) + TILE/2
+      </pre>
+    </div>
+
+    <div class="box">
+      <h2>Entity object shape</h2>
+      <pre><code>// One entity instance (Pac-Man or a ghost)
+{
+  id: string,                    // stable id (e.g. "pacman", "ghost1")
+  kind: "pacman" | "ghost",      // type
+
+  // Position/state (tile-based)
+  r: number,                     // current tile row
+  c: number,                     // current tile col
+  dir: "up"|"down"|"left"|"right" | null,
+
+  // Rendering (sprite)
+  spriteSrc: string,            // placeholder JPEG path
+  img: HTMLImageElement | null, // loaded image
+  loaded: boolean,
+
+  // How the sprite should fit within one tile
+  spriteScale: number,          // e.g. 0.9 means draw at 0.9*TILE
+  drawOffsetY: number,          // pixel offset to align "feet" to corridors
+}</code></pre>
+      <p style="margin: 6px 0 0; color:#bfbfbf;">
+        The current milestone focuses on spawn positions + rendering.
+        Movement/collision can be layered on next.
+      </p>
+    </div>
+
+    <div class="box">
+      <h2>Starting spawns used in drizzy.html</h2>
+      <pre><code>// Tile spawns (r, c) in the MAZE_TEMPLATE grid
+// Pac-Man (player)
+{ id: "pacman", r: 17, c: 10 }
+
+// Ghost house occupants (T_GHOST tiles = 4 in your template)
+{ id: "ghost1", r: 10, c: 9  }
+{ id: "ghost2", r: 10, c: 11 }
+{ id: "ghost3", r: 9,  c: 10 }
+{ id: "ghost4", r: 10, c: 12 }</code></pre>
+      <p style="margin: 6px 0 0; color:#bfbfbf;">
+        You can tweak these (and spriteScale/drawOffsetY) to make each JPEG fit the corridor width first.
+      </p>
+    </div>
+  </body>
+</html>
+

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drizzy Grid</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #canvas-wrap {
+      border: 2px solid #00BFFF;
+      box-shadow: 0 0 24px rgba(0, 191, 255, 0.5);
+    }
+    canvas { display: block; background: #000; }
+  </style>
+</head>
+<body>
+  <div id="canvas-wrap">
+    <canvas id="gameCanvas"></canvas>
+  </div>
+
+<script src="./entityrules.js"></script>
+<script src="./gameplay.js"></script>
+<script>
+// ================================================================
+//  CONFIGURATION
+// ================================================================
+const T_EMPTY  = 0;   // open path (gets a pellet in buildMaze)
+const T_WALL   = 1;   // solid wall  → drawn #00BFFF
+const T_PELLET = 2;   // small dot on a path
+const T_POWER  = 3;   // power pellet
+const T_GHOST  = 4;   // ghost house floor (black path, no pellet)
+
+const WALL_COLOR  = '#00BFFF';  // deep sky blue walls
+const PATH_COLOR  = '#000';    // black walkable corridors
+const WALL_STROKE = '#009acd'; // slightly darker edge on walls
+
+// ================================================================
+//  GEOMETRY STAGE — static maze layout (your grid, lines 42–65)
+//  Each number is one tile. Row/column index × TILE = pixel position
+//  when we draw in drawMaze().
+// ================================================================
+/*
+  Tile key:
+    1 = wall
+    0 = open path (buildMaze turns into pellet)
+    2 = pellet on path
+    3 = power pellet
+    4 = ghost house interior
+*/
+const MAZE_TEMPLATE = [
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+  [1,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,1],
+  [1,2,1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,1,2,1],
+  [1,3,1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,1,3,1],
+  [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+  [1,2,1,1,2,1,2,1,1,1,1,1,1,1,2,1,2,1,1,2,1],
+  [1,2,2,2,2,1,2,2,2,2,1,2,2,2,2,1,2,2,2,2,1],
+  [1,1,1,1,2,1,1,1,0,1,1,1,0,1,1,1,2,1,1,1,1],
+  [0,0,0,1,2,1,0,0,0,0,0,0,0,0,0,1,2,1,0,0,0],
+  [1,1,1,1,2,1,0,1,1,4,4,4,1,1,0,1,2,1,1,1,1],
+  [0,0,0,0,2,0,0,1,4,4,4,4,4,1,0,0,2,0,0,0,0], // side tunnel row
+  [1,1,1,1,2,1,0,1,1,1,1,1,1,1,0,1,2,1,1,1,1],
+  [0,0,0,1,2,1,0,0,0,0,0,0,0,0,0,1,2,1,0,0,0],
+  [1,1,1,1,2,1,1,1,0,1,1,1,0,1,1,1,2,1,1,1,1],
+  [1,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,1],
+  [1,2,1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1,1,2,1],
+  [1,3,2,1,2,2,2,2,2,2,0,2,2,2,2,2,2,1,2,3,1],
+  [1,1,2,1,2,1,2,1,1,1,1,1,1,1,2,1,2,1,2,1,1],
+  [1,2,2,2,2,1,2,2,2,2,1,2,2,2,2,1,2,2,2,2,1],
+  [1,2,1,1,1,1,1,1,2,1,1,1,2,1,1,1,1,1,1,2,1],
+  [1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1],
+  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+];
+
+const ROWS = MAZE_TEMPLATE.length;
+const COLS = MAZE_TEMPLATE[0].length;
+
+// TILE fills the full viewport height so no scrollbar is needed.
+// Also capped so the canvas never exceeds the viewport width.
+const TILE = Math.floor(Math.min(
+  window.innerHeight / ROWS,
+  window.innerWidth  / COLS
+));
+
+const W = TILE * COLS;
+const H = TILE * ROWS;
+
+// ================================================================
+//  APPLICATION STAGE — copy template into live `maze[][]`
+//  Same pattern as maze.html: static layout → mutable board for gameplay.
+// ================================================================
+let maze = [];
+
+function buildMaze() {
+  maze = [];
+  for (let r = 0; r < ROWS; r++) {
+    maze[r] = [];
+    for (let c = 0; c < COLS; c++) {
+      const t = MAZE_TEMPLATE[r][c];
+      // Bare open tiles (0) become pellets; everything else stays as-is
+      maze[r][c] = t === T_EMPTY ? T_PELLET : t;
+    }
+  }
+}
+
+// ================================================================
+//  APPLICATION STAGE — tile index ↔ pixel position (like maze.html)
+// ================================================================
+function tileToPixelX(col) { return col * TILE; }
+function tileToPixelY(row) { return row * TILE; }
+
+// ================================================================
+//  RASTERIZATION STAGE — canvas setup
+// ================================================================
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
+canvas.width  = W;
+canvas.height = H;
+
+// ================================================================
+//  RASTERIZATION STAGE — drawMaze()
+//  Walls: #00BFFF fills. Paths: black (#000). Pellets drawn on paths.
+// ================================================================
+function drawMaze() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const px   = tileToPixelX(c);
+      const py   = tileToPixelY(r);
+      const cell = maze[r][c];
+
+      if (cell === T_WALL) {
+        // Wall tile — deep sky blue
+        ctx.fillStyle = WALL_COLOR;
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.fillStyle = 'rgba(128, 221, 255, 0.35)';
+        ctx.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
+        ctx.strokeStyle = WALL_STROKE;
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(px + 0.5, py + 0.5, TILE - 1, TILE - 1);
+
+      } else if (cell === T_PELLET || cell === T_POWER) {
+        // Black path first, then dot on top
+        ctx.fillStyle = PATH_COLOR;
+        ctx.fillRect(px, py, TILE, TILE);
+        ctx.fillStyle = '#ffb8ae';
+        if (cell === T_PELLET) {
+          ctx.beginPath();
+          ctx.arc(px + TILE / 2, py + TILE / 2, 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          const pulse = 4 + Math.sin(Date.now() * 0.006) * 1.5;
+          ctx.shadowColor = '#ffb8ae';
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.arc(px + TILE / 2, py + TILE / 2, pulse, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+        }
+
+      } else {
+        // T_GHOST or any other non-wall —  `        black path
+        ctx.fillStyle = PATH_COLOR;
+        ctx.fillRect(px, py, TILE, TILE);
+      }
+    }
+  }
+
+  // Side tunnel (row 10): punch open left/right border so paths connect
+  const tunnelRow = 10;
+  ctx.fillStyle = PATH_COLOR;
+  ctx.fillRect(0, tileToPixelY(tunnelRow), TILE, TILE);
+  ctx.fillRect(W - TILE, tileToPixelY(tunnelRow), TILE, TILE);
+}
+
+//  RASTERIZATION STAGE — debug grid overlay (press G to toggle)
+let showGrid = false;
+
+function drawGrid() {
+  if (!showGrid) return;
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 0.5;
+  for (let c = 0; c <= COLS; c++) {
+    ctx.beginPath();
+    ctx.moveTo(c * TILE, 0);
+    ctx.lineTo(c * TILE, H);
+    ctx.stroke();
+  }
+  for (let r = 0; r <= ROWS; r++) {
+    ctx.beginPath();
+    ctx.moveTo(0, r * TILE);
+    ctx.lineTo(W, r * TILE);
+    ctx.stroke();
+  }
+}
+
+function drawGhostHouse() {
+  ctx.strokeStyle = '#ff69b4';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(8 * TILE, 9 * TILE, 5 * TILE, 3 * TILE);
+  ctx.fillStyle = '#ffb8ae';
+  ctx.fillRect(9 * TILE, 9 * TILE, 3 * TILE, 3);
+}
+
+//define spawn positions + render sprites.
+
+function tileCenterX(col) { return tileToPixelX(col) + TILE / 2; }
+function tileCenterY(row) { return tileToPixelY(row) + TILE / 2; }
+
+//our objects like main character and ghosts
+const ENTITIES = [
+  {
+    id: 'pacman',
+    kind: 'pacman',
+    r: 16,
+    c: 10,
+    dir: null,
+    spriteSrc: './images/drake-removebg-preview.png',
+    spriteScale: 2.9,
+    drawOffsetY: 0,    // tweak to align with corridor centers
+    img: null,
+    loaded: false,
+  },
+  {
+    id: 'ghost1',
+    kind: 'ghost',
+    r: 10,
+    c: 9,
+    dir: null,
+    spriteSrc: './images/asap-removebg-preview.png',
+    spriteScale: 1.8,
+    drawOffsetX: 0,
+    drawOffsetY: 0,
+    img: null,
+    loaded: false,
+  },
+  {
+    id: 'ghost2',
+    kind: 'ghost',
+    r: 10,
+    c: 11,
+    dir: null,
+    spriteSrc: './images/weeknd-removebg-preview.png',
+    spriteScale: 2.9,
+    drawOffsetX: 0,
+    drawOffsetY: 0,
+    img: null,
+    loaded: false,
+  },
+  {
+    id: 'ghost3',
+    kind: 'ghost',
+    r: 9,
+    c: 10,
+    dir: null,
+    spriteSrc: './images/kendricklamar-removebg-preview.png',
+    spriteScale: 2.9,
+    drawOffsetX: 0,
+    drawOffsetY: 0,
+    img: null,
+    loaded: false,
+  },
+  {
+    id: 'ghost4',
+    kind: 'ghost',
+    r: 10,
+    c: 12,
+    dir: null,
+    spriteSrc: './images/kanye-removebg-preview.png',
+    spriteScale: 1.2,
+    drawOffsetX: 0,
+    drawOffsetY: 0,
+    img: null,
+    loaded: false,
+  },
+];
+
+// ================================================================
+//  GAME STATE — score, pellet respawn, game-over
+// ================================================================
+let score    = 0;
+let gameOver = false;
+let gameTime = 0;   // total seconds elapsed (paused on game-over)
+
+const SCORE_PELLET  = 10;
+const SCORE_POWER   = 50;
+const RESPAWN_DELAY = 30; // seconds before an eaten pellet reappears
+
+// { r, c, type: T_PELLET|T_POWER, eatenAt: seconds }
+const pelletRespawnQueue = [];
+
+// Original spawn positions keyed by entity id — used for reset
+const SPAWN = {};
+for (const ent of ENTITIES) SPAWN[ent.id] = { r: ent.r, c: ent.c };
+
+// ── Pellet eating ─────────────────────────────────────────────────────────
+function checkPelletEat() {
+  const pac = ENTITIES.find(e => e.id === 'pacman');
+  if (!pac) return;
+  const cell = maze[pac.r]?.[pac.c];
+  if (cell === T_PELLET || cell === T_POWER) {
+    score += cell === T_PELLET ? SCORE_PELLET : SCORE_POWER;
+    pelletRespawnQueue.push({ r: pac.r, c: pac.c, type: cell, eatenAt: gameTime });
+    maze[pac.r][pac.c] = T_EMPTY;
+  }
+}
+
+// ── Pellet respawn after 30 s (skip if Pac-Man still on the tile) ─────────
+function checkRespawn() {
+  const pac = ENTITIES.find(e => e.id === 'pacman');
+  let i = 0;
+  while (i < pelletRespawnQueue.length) {
+    const entry = pelletRespawnQueue[i];
+    if (gameTime - entry.eatenAt >= RESPAWN_DELAY) {
+      if (!pac || pac.r !== entry.r || pac.c !== entry.c) {
+        maze[entry.r][entry.c] = entry.type;
+        pelletRespawnQueue.splice(i, 1);
+        continue; // don't advance i; next entry shifted into slot i
+      }
+      // Pac-Man is on this tile — keep waiting (don't reset eatenAt)
+    }
+    i++;
+  }
+}
+
+// ── Ghost-Pac collision ───────────────────────────────────────────────────
+function checkGhostCollision() {
+  const pac = ENTITIES.find(e => e.id === 'pacman');
+  if (!pac) return;
+  for (const ent of ENTITIES) {
+    if (ent.kind !== 'ghost') continue;
+    if (ent.state !== 'chasing') continue; // caged/exiting ghosts don't kill
+    if (ent.r === pac.r && ent.c === pac.c) {
+      gameOver = true;
+      return;
+    }
+  }
+}
+
+// ── Reset everything to initial state ────────────────────────────────────
+function resetGame() {
+  buildMaze();
+  pelletRespawnQueue.length = 0;
+  score    = 0;
+  gameOver = false;
+  gameTime = 0;
+
+  for (const ent of ENTITIES) {
+    const sp = SPAWN[ent.id];
+    if (!sp) continue;
+    ent.r    = sp.r;
+    ent.c    = sp.c;
+    ent.px   = tileCenterX(ent.c);
+    ent.py   = tileCenterY(ent.r);
+    ent.step = null;
+    ent.dir  = null;
+    if (ent.kind === 'pacman') ent.desiredDir = null;
+  }
+
+  if (window.GhostAI) window.GhostAI.reset({ ENTITIES, pacmanId: 'pacman' });
+}
+
+// ── HUD — score drawn over the top wall row ───────────────────────────────
+function drawHUD() {
+  const fs = Math.max(10, Math.floor(TILE * 0.62));
+  ctx.save();
+  ctx.font         = `bold ${fs}px monospace`;
+  ctx.textAlign    = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor  = '#ff6b50';
+  ctx.shadowBlur   = 8;
+  ctx.fillStyle    = '#ffb8ae';
+  ctx.fillText(`SCORE  ${score}`, TILE * 0.35, TILE * 0.5);
+  ctx.restore();
+}
+
+// ── Game-over overlay ─────────────────────────────────────────────────────
+function drawGameOver() {
+  ctx.save();
+
+  // Dim the board
+  ctx.fillStyle = 'rgba(0,0,0,0.78)';
+  ctx.fillRect(0, 0, W, H);
+
+  const cx = W / 2;
+  const cy = H / 2;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+
+  // "GAME OVER"
+  ctx.shadowColor = '#ff0000';
+  ctx.shadowBlur  = 24;
+  ctx.fillStyle   = '#ff4444';
+  ctx.font        = `bold ${Math.floor(TILE * 1.25)}px monospace`;
+  ctx.fillText('GAME OVER', cx, cy - TILE * 2.6);
+
+  // Score tally
+  ctx.shadowColor = '#ff8c69';
+  ctx.shadowBlur  = 10;
+  ctx.fillStyle   = '#ffb8ae';
+  ctx.font        = `bold ${Math.floor(TILE * 0.85)}px monospace`;
+  ctx.fillText(`FINAL SCORE:  ${score}`, cx, cy - TILE * 0.6);
+
+  // Restart prompt
+  ctx.shadowBlur  = 0;
+  ctx.fillStyle   = '#00BFFF';
+  ctx.font        = `${Math.floor(TILE * 0.65)}px monospace`;
+  ctx.fillText('Press  R  to play again', cx, cy + TILE * 2);
+
+  ctx.restore();
+}
+
+// Initialize movement rules (Pac-Man).
+if (window.EntityRules) {
+  window.EntityRules.initEntityRules({ ENTITIES, pacmanId: 'pacman' });
+}
+
+// Initialize ghost release + BFS chase AI.
+if (window.GhostAI) {
+  window.GhostAI.init({ ENTITIES, pacmanId: 'pacman' });
+}
+
+
+// Load all sprites up front (render loop will draw fallback shapes until loaded).
+for (const ent of ENTITIES) {
+  const img = new Image();
+  img.onload = () => { ent.loaded = true; };
+  img.onerror = () => {
+    // Keep fallback rendering if sprite path is wrong/unavailable.
+    console.warn(`Sprite failed to load: ${ent.spriteSrc}`);
+    ent.loaded = false;
+  };
+  ent.img = img;
+  img.src = ent.spriteSrc;
+}
+
+function drawEntity(ent) {
+  // Pac-Man uses smooth pixel positions (ent.px/ent.py). Ghosts use px/py + small offsets.
+  const offsetX = ent.drawOffsetX ?? 0;
+  const offsetY = ent.drawOffsetY ?? 0;
+  const x = (typeof ent.px === 'number' ? ent.px : tileCenterX(ent.c)) + offsetX;
+  const baseY = typeof ent.py === 'number' ? ent.py : tileCenterY(ent.r);
+  const y = baseY + offsetY;
+  const size = TILE * ent.spriteScale;
+
+  if (ent.loaded && ent.img) {
+    // Draw image centered on the tile.
+    ctx.drawImage(ent.img, x - size / 2, y - size / 2, size, size);
+    return;
+  }
+
+  // Fallback visuals (so you always see where entities spawn).
+  if (ent.kind === 'pacman') {
+    ctx.fillStyle = '#ffff66';
+  } else {
+    ctx.fillStyle = '#ff69b4';
+  }
+  ctx.beginPath();
+  ctx.arc(x, y, size * 0.42, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function drawEntities() {
+  for (const ent of ENTITIES) drawEntity(ent);
+}
+
+//  APPLICATION STAGE — game loop (clear → maze → overlays)
+
+let lastFrameTs = performance.now();
+function gameLoop(ts) {
+  const now = typeof ts === 'number' ? ts : performance.now();
+  const dtSeconds = Math.min((now - lastFrameTs) / 1000, 0.05);
+  lastFrameTs = now;
+
+  if (!gameOver) {
+    gameTime += dtSeconds;
+    if (window.EntityRules) window.EntityRules.updateEntities(dtSeconds);
+    if (window.GhostAI)    window.GhostAI.update(dtSeconds);
+    checkPelletEat();
+    checkRespawn();
+    checkGhostCollision();
+  }
+
+  ctx.fillStyle = PATH_COLOR;
+  ctx.fillRect(0, 0, W, H);
+  drawMaze();
+  drawGhostHouse();
+  drawGrid();
+  drawEntities();
+  drawHUD();
+  if (gameOver) drawGameOver();
+
+  requestAnimationFrame(gameLoop);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'g' || e.key === 'G') showGrid = !showGrid;
+  if ((e.key === 'r' || e.key === 'R') && gameOver) resetGame();
+});
+
+buildMaze();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
