@@ -174,6 +174,34 @@
     pacman.desiredDir = dir;
   }
 
+  // ── Touch / swipe input (mobile) ─────────────────────────────────────────
+  // Record where the finger went down, then on lift compare displacement.
+  // If the travel exceeds MIN_SWIPE_PX, map the dominant axis to a direction
+  // and store it as desiredDir — same as pressing an arrow key.
+  // Short taps (travel < MIN_SWIPE_PX) are ignored here so the tap-to-restart
+  // handler in index.html can handle them without interference.
+  const MIN_SWIPE_PX = 30;
+  let swipeSX = 0, swipeSY = 0;
+
+  document.addEventListener('touchstart', e => {
+    swipeSX = e.changedTouches[0].clientX;
+    swipeSY = e.changedTouches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchend', e => {
+    if (!pacman) return;
+    const dx = e.changedTouches[0].clientX - swipeSX;
+    const dy = e.changedTouches[0].clientY - swipeSY;
+    if (Math.abs(dx) < MIN_SWIPE_PX && Math.abs(dy) < MIN_SWIPE_PX) return; // tap — ignore
+
+    // Dominant axis decides direction: horizontal wins ties
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      pacman.desiredDir = dx > 0 ? 'right' : 'left';
+    } else {
+      pacman.desiredDir = dy > 0 ? 'down' : 'up';
+    }
+  }, { passive: true });
+
   function initEntityRules({ ENTITIES, pacmanId = "pacman" } = {}) {
     if (initialized) return;
     if (!ENTITIES) throw new Error("EntityRules.initEntityRules requires { ENTITIES }");

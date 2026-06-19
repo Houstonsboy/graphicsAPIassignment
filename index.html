@@ -2,23 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Drizzy Grid</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* --vinyl-size shrinks on small phones so it never crowds the maze */
     :root { --vinyl-size: 160px; }
+    @media (max-width: 480px) { :root { --vinyl-size: 90px; } }
+
     body {
       background: #000;
       display: flex;
       align-items: center;
-      justify-content: center;
+      /* Portrait mobile: push canvas to the top so the maze fills top→bottom */
+      justify-content: flex-start;
+      flex-direction: column;
       width: 100vw;
-      height: 100vh;
+      /* 100svh = "small viewport height" — excludes the collapsible browser chrome
+         on mobile so the canvas never gets clipped by the address bar            */
+      height: 100svh;
       overflow: hidden;
+      /* Notch / home-bar safe areas */
+      padding-top:    env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
     }
+    /* On landscape screens center the canvas vertically like before */
+    @media (orientation: landscape) {
+      body { justify-content: center; }
+    }
+
     #canvas-wrap {
       border: 2px solid #00BFFF;
       box-shadow: 0 0 24px rgba(0, 191, 255, 0.5);
+      /* Prevent browser treating canvas swipes as page-scroll gestures */
+      touch-action: none;
+      /* Mobile scale expands from here so the maze grows downward, not upward */
+      transform-origin: top center;
     }
     canvas { display: block; background: #000; }
 
@@ -100,6 +120,144 @@
       z-index: 3;
       box-shadow: inset 0 0 4px #000;
     }
+
+    /* ── Leaderboard panel ── */
+    #lb-panel {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 175px;
+      background: rgba(0,0,0,0.88);
+      border-top: 2px solid #00BFFF;
+      border-right: 2px solid #00BFFF;
+      border-radius: 0 8px 0 0;
+      z-index: 150;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      max-height: 55vh;
+    }
+    #lb-title {
+      font-size: 11px;
+      font-weight: bold;
+      color: #00BFFF;
+      padding: 6px 10px;
+      letter-spacing: 1px;
+      border-bottom: 1px solid rgba(0,191,255,0.3);
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #lb-body { overflow-y: auto; }
+    #lb-list { list-style: none; margin: 0; padding: 0; }
+    #lb-list li {
+      display: flex;
+      gap: 5px;
+      padding: 3px 8px;
+      font-size: 11px;
+      align-items: center;
+    }
+    #lb-list li.lb-me { background: rgba(0,191,255,0.15); color: #00BFFF; }
+    .lb-rank  { color: #00BFFF; min-width: 24px; font-weight: bold; }
+    .lb-name  { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #ffb8ae; }
+    .lb-score { font-weight: bold; color: #ffb8ae; }
+    .lb-empty { font-style: italic; padding: 6px 8px; color: rgba(255,184,174,0.5); }
+    #lb-panel.collapsed #lb-body { display: none; }
+
+    /* ── Modals ── */
+    .dz-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.82);
+      z-index: 300;
+      align-items: center;
+      justify-content: center;
+    }
+    .dz-box {
+      background: #000;
+      border: 2px solid #00BFFF;
+      border-radius: 8px;
+      padding: 22px 26px;
+      min-width: 260px;
+      max-width: 88vw;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .dz-box h2 { color: #00BFFF; font-size: 14px; letter-spacing: 1px; margin: 0; }
+    .dz-box p  { color: #ffb8ae; font-size: 13px; margin: 0; }
+    .dz-box input {
+      background: #111;
+      border: 1px solid #00BFFF;
+      border-radius: 4px;
+      color: #ffb8ae;
+      font-family: monospace;
+      font-size: 14px;
+      padding: 8px 10px;
+      outline: none;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .dz-box input:focus { border-color: #fff; }
+    .dz-btns { display: flex; gap: 10px; justify-content: flex-end; }
+    .dz-btn {
+      background: transparent;
+      border: 1px solid #00BFFF;
+      border-radius: 4px;
+      color: #00BFFF;
+      font-family: monospace;
+      font-size: 13px;
+      padding: 7px 16px;
+      cursor: pointer;
+    }
+    .dz-btn:hover  { background: rgba(0,191,255,0.12); }
+    .dz-btn.solid  { background: #00BFFF; color: #000; }
+    .dz-btn.solid:hover { background: #33cfff; }
+    .dz-btn:disabled { opacity: 0.5; cursor: default; }
+    .dz-err { color: #ff6b6b; font-size: 11px; min-height: 14px; }
+
+    /* ── Game-over DOM buttons ── */
+    #go-buttons {
+      display: none;
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      gap: 14px;
+      z-index: 250;
+    }
+    #go-buttons.show { display: flex; }
+    #go-buttons .dz-btn { font-size: 14px; padding: 10px 20px; }
+
+    /* ── Rank toast ── */
+    #rank-toast {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.92);
+      border: 1px solid #00BFFF;
+      border-radius: 6px;
+      color: #00BFFF;
+      font-family: monospace;
+      font-size: 13px;
+      padding: 8px 18px;
+      z-index: 400;
+      opacity: 0;
+      transition: opacity 0.4s;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 480px) {
+      #lb-panel { width: 148px; }
+      #lb-list li { font-size: 10px; }
+      #go-buttons .dz-btn { font-size: 13px; padding: 9px 16px; }
+    }
   </style>
 </head>
 <body>
@@ -118,6 +276,49 @@
   <div id="canvas-wrap">
     <canvas id="gameCanvas"></canvas>
   </div>
+
+  <!-- Leaderboard panel (bottom-left) -->
+  <div id="lb-panel">
+    <div id="lb-title">LEADERBOARD <span id="lb-toggle">▾</span></div>
+    <div id="lb-body">
+      <ul id="lb-list"><li class="lb-empty">Loading…</li></ul>
+    </div>
+  </div>
+
+  <!-- Username prompt — shown once on load if no name stored -->
+  <div id="username-modal" class="dz-modal">
+    <div class="dz-box">
+      <h2>ENTER YOUR NAME</h2>
+      <input id="username-input" type="text" maxlength="20" placeholder="Your username" autocomplete="off" spellcheck="false" />
+      <div class="dz-err" id="username-err"></div>
+      <div class="dz-btns">
+        <button id="username-confirm" class="dz-btn solid">Let's Go</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save-score modal — opened on S key or Save button -->
+  <div id="save-modal" class="dz-modal">
+    <div class="dz-box">
+      <h2>SAVE TO LEADERBOARD</h2>
+      <p>Score: <strong id="save-score-val" style="color:#00BFFF">0</strong></p>
+      <input id="save-username" type="text" maxlength="20" placeholder="Username" autocomplete="off" spellcheck="false" />
+      <div class="dz-err" id="save-err"></div>
+      <div class="dz-btns">
+        <button id="save-cancel" class="dz-btn">Cancel</button>
+        <button id="save-post"   class="dz-btn solid">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game-over action buttons (appear on game over, handle mobile + desktop) -->
+  <div id="go-buttons">
+    <button id="btn-retry"      class="dz-btn">↺ Retry</button>
+    <button id="btn-save-score" class="dz-btn solid">♪ Save Score</button>
+  </div>
+
+  <!-- Rank notification toast -->
+  <div id="rank-toast"></div>
 
 <script src="./entityrules.js"></script>
 <script src="./gameplay.js"></script>
@@ -210,6 +411,29 @@ const canvas = document.getElementById('gameCanvas');
 const ctx    = canvas.getContext('2d');
 canvas.width  = W;
 canvas.height = H;
+
+// GEOMETRY STAGE — portrait-mobile scale
+// The maze is nearly square (21 × 22) but phones are tall (≈9:16), so fitting
+// the full width leaves ~50% of the screen empty below the canvas.
+// Solution: scale the canvas-wrap UP uniformly until the outermost column
+// (col 0 / col 20 — solid walls only, no pellets or corridors) just clips
+// off each edge.  Everything the player interacts with stays fully visible.
+//
+//   scaleByWidth  → how much we can grow before 1 outer-wall tile clips per side
+//   scaleByHeight → how much we could grow to fill the full screen height
+//   We pick the smaller of the two so we never overflow vertically.
+//
+// CSS transform: scale() does NOT change layout flow, so body overflow:hidden
+// clips the tiny horizontal overhang cleanly on both sides.
+(function applyMobileScale() {
+  if (window.innerHeight <= window.innerWidth) return; // landscape / desktop: no change
+  const wrap = document.getElementById('canvas-wrap');
+  const clipBudget  = TILE;                                   // 1 outer-wall tile per side
+  const scaleByWidth  = (window.innerWidth  + 2 * clipBudget) / W;
+  const scaleByHeight =  window.innerHeight / H;
+  const scale = Math.min(scaleByWidth, scaleByHeight);
+  if (scale > 1.01) wrap.style.transform = `scale(${scale.toFixed(4)})`;
+})();
 
 // ================================================================
 //  RASTERIZATION STAGE — drawMaze()
@@ -426,7 +650,12 @@ function checkGhostCollision() {
     if (ent.kind !== 'ghost') continue;
     if (ent.state !== 'chasing') continue; // caged/exiting ghosts don't kill
     if (ent.r === pac.r && ent.c === pac.c) {
+      // APPLICATION: game-over state change.
+      // Before showing the overlay, seek the vinyl back to 0 ("replay when over")
+      // then pause it so the disc stops spinning.
+      if (window.VinylPlayer) window.VinylPlayer.restartAndPause();
       gameOver = true;
+      document.getElementById('go-buttons')?.classList.add('show');
       return;
     }
   }
@@ -439,6 +668,9 @@ function resetGame() {
   score    = 0;
   gameOver = false;
   gameTime = 0;
+  document.getElementById('go-buttons')?.classList.remove('show');
+  // Resume vinyl from beginning (it was seeked to 0 on game-over)
+  if (window.VinylPlayer) window.VinylPlayer.play();
 
   for (const ent of ENTITIES) {
     const sp = SPAWN[ent.id];
@@ -496,11 +728,11 @@ function drawGameOver() {
   ctx.font        = `bold ${Math.floor(TILE * 0.85)}px monospace`;
   ctx.fillText(`FINAL SCORE:  ${score}`, cx, cy - TILE * 0.6);
 
-  // Restart prompt
+  // Restart prompt — keyboard hint on desktop, tap hint on mobile
   ctx.shadowBlur  = 0;
   ctx.fillStyle   = '#00BFFF';
   ctx.font        = `${Math.floor(TILE * 0.65)}px monospace`;
-  ctx.fillText('Press  R  to play again', cx, cy + TILE * 2);
+  ctx.fillText('R  Retry       S  Save Score', cx, cy + TILE * 2);
 
   ctx.restore();
 }
@@ -561,6 +793,19 @@ function drawEntities() {
 
 //  APPLICATION STAGE — game loop (clear → maze → overlays)
 
+// Browsers block audio.play() until a user gesture has occurred.
+// We listen for the very first touch or click, unlock audio, then remove the listener.
+let _audioUnlocked = false;
+function _unlockAndPlay() {
+  if (_audioUnlocked) return;
+  _audioUnlocked = true;
+  if (window.VinylPlayer) window.VinylPlayer.play();
+  document.removeEventListener('touchend', _unlockAndPlay);
+  document.removeEventListener('click',    _unlockAndPlay);
+}
+document.addEventListener('touchend', _unlockAndPlay, { passive: true });
+document.addEventListener('click',    _unlockAndPlay, { passive: true });
+
 let lastFrameTs = performance.now();
 function gameLoop(ts) {
   const now = typeof ts === 'number' ? ts : performance.now();
@@ -588,13 +833,21 @@ function gameLoop(ts) {
   requestAnimationFrame(gameLoop);
 }
 
+// Desktop: R to restart, G to toggle debug grid
 document.addEventListener('keydown', e => {
   if (e.key === 'g' || e.key === 'G') showGrid = !showGrid;
   if ((e.key === 'r' || e.key === 'R') && gameOver) resetGame();
+  if ((e.key === 's' || e.key === 'S') && gameOver) window.Leaderboard?.openSaveModal?.(score);
 });
+
+// Mobile game-over is handled by the #go-buttons DOM overlay (Retry / Save Score).
+// We still track touchstart so entityrules.js swipe detection keeps working.
 
 buildMaze();
 requestAnimationFrame(gameLoop);
+
+document.getElementById('btn-retry')?.addEventListener('click', () => { if (gameOver) resetGame(); });
+document.getElementById('btn-save-score')?.addEventListener('click', () => { if (gameOver) window.Leaderboard?.openSaveModal?.(score); });
 </script>
 
 <script>
@@ -612,38 +865,41 @@ requestAnimationFrame(gameLoop);
   const disc  = document.getElementById('vinyl-disc');
   const img   = document.getElementById('album-art');
   const audio = new Audio();
-
-  if (VINYL_MP3) audio.src = VINYL_MP3;
+  audio.src = VINYL_MP3;
 
   if (VINYL_IMAGE) {
     img.src = VINYL_IMAGE;
     img.onload = () => { img.style.display = 'block'; };
   }
 
-  function setSpin(on) {
-    disc.classList.toggle('playing', on);
-  }
+  // Spin the disc only when audio is actually playing
+  audio.addEventListener('play',  () => disc.classList.add('playing'));
+  audio.addEventListener('pause', () => disc.classList.remove('playing'));
+  audio.addEventListener('ended', () => disc.classList.remove('playing'));
 
-  function togglePlay() {
-    if (!VINYL_MP3) {
-      console.warn('Set VINYL_MP3 in index.html (vinyl script section).');
-      return;
-    }
-    if (audio.paused) {
-      audio.play().then(() => setSpin(true)).catch(err => console.warn('Playback failed:', err));
-    } else {
-      audio.pause();
-      setSpin(false);
-    }
-  }
+  // Clicking the disc manually toggles play/pause (desktop or manual override)
+  disc.addEventListener('click', () => {
+    if (audio.paused) audio.play().catch(() => {});
+    else              audio.pause();
+  });
 
-  disc.addEventListener('click', togglePlay);
-  audio.addEventListener('ended', () => setSpin(false));
-  audio.addEventListener('pause', () => setSpin(false));
-  audio.addEventListener('play', () => setSpin(true));
-
-  if (VINYL_MP3) audio.play().catch(() => { /* autoplay blocked — click disc */ });
+  // ── Public API used by the game ──────────────────────────────────────────
+  // play()            — start (or resume) playback; called on game-start & restart
+  // restartAndPause() — seek to 0 and pause; called on game-over
+  //                     ("replay when over before game over": seeks track back so
+  //                      next play() starts fresh; disc stops spinning)
+  window.VinylPlayer = {
+    play() {
+      audio.play().catch(() => {});   // may be blocked until first user gesture
+    },
+    restartAndPause() {
+      audio.currentTime = 0;          // rewind to start ("replay")
+      audio.pause();                  // stop playback ("pause it on game over")
+    },
+  };
 })();
 </script>
+
+<script type="module" src="./leaderboard.js"></script>
 </body>
 </html>
