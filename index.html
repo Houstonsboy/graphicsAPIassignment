@@ -121,6 +121,35 @@
       box-shadow: inset 0 0 4px #000;
     }
 
+    /* ── Back button ── */
+    #btn-back {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 200;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.80);
+      border: 2px solid #00BFFF;
+      color: #00BFFF;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 0 10px rgba(0,191,255,0.35);
+      transition: background 0.15s, box-shadow 0.15s;
+    }
+    #btn-back:hover {
+      background: rgba(0,191,255,0.15);
+      box-shadow: 0 0 18px rgba(0,191,255,0.6);
+    }
+    @media (max-width: 480px) {
+      #btn-back { width: 34px; height: 34px; font-size: 15px; }
+    }
+
     /* ── Leaderboard panel ── */
     #lb-panel {
       position: fixed;
@@ -276,6 +305,9 @@
   <div id="canvas-wrap">
     <canvas id="gameCanvas"></canvas>
   </div>
+
+  <!-- Back button -->
+  <a id="btn-back" href="https://houstonsboy.github.io/MyComicseverything/" aria-label="Back to My Comics">&#8592;</a>
 
   <!-- Leaderboard panel (bottom-left) -->
   <div id="lb-panel">
