@@ -837,7 +837,7 @@ function gameLoop(ts) {
 document.addEventListener('keydown', e => {
   if (e.key === 'g' || e.key === 'G') showGrid = !showGrid;
   if ((e.key === 'r' || e.key === 'R') && gameOver) resetGame();
-  if ((e.key === 's' || e.key === 'S') && gameOver) window.Leaderboard?.openSaveModal?.(score);
+  if ((e.key === 's' || e.key === 'S') && gameOver && document.activeElement?.tagName !== 'INPUT') window.Leaderboard?.openSaveModal?.(score);
 });
 
 // Mobile game-over is handled by the #go-buttons DOM overlay (Retry / Save Score).
